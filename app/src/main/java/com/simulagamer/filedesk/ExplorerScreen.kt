@@ -724,6 +724,7 @@ private fun CommandBar(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun DetailsView(
     context: Context,
