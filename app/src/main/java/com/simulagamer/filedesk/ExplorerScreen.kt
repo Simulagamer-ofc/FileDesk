@@ -9,6 +9,7 @@ import androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTre
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -23,6 +24,8 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -60,6 +63,7 @@ fun ExplorerScreen(
     val wideScreen = configuration.screenWidthDp >= 840
     val prefs = remember { context.getSharedPreferences("filedesk_v1", Context.MODE_PRIVATE) }
     val scope = rememberCoroutineScope()
+    val keyboardFocus = remember { FocusRequester() }
 
     var rootUris by remember {
         mutableStateOf(
@@ -249,8 +253,14 @@ fun ExplorerScreen(
         forwardHistory = emptyList()
     }
 
+    LaunchedEffect(Unit) {
+        runCatching { keyboardFocus.requestFocus() }
+    }
+
     val rootModifier = Modifier
         .fillMaxSize()
+        .focusRequester(keyboardFocus)
+        .focusable()
         .onPreviewKeyEvent { event ->
             if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
             when {
@@ -949,7 +959,11 @@ private suspend fun copyDocument(context: Context, source: DocumentFile, destina
         if (source.isDirectory) {
             val folderName = uniqueName(destination, source.name ?: "Pasta")
             val newDir = destination.createDirectory(folderName) ?: return@runCatching false
-            source.listFiles().all { child -> copyDocument(context, child, newDir) }
+            var ok = true
+            for (child in source.listFiles()) {
+                if (!copyDocument(context, child, newDir)) ok = false
+            }
+            ok
         } else {
             val originalName = source.name ?: "arquivo"
             val name = uniqueName(destination, originalName)
