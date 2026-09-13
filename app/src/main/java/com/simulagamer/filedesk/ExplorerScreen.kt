@@ -3,9 +3,11 @@ package com.simulagamer.filedesk
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Environment
+import java.io.File
 import android.text.format.Formatter
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree
+import androidx.activity.result.contract.ActivityResultContracts.OpenMultipleDocuments
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -39,6 +41,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.documentfile.provider.DocumentFile
+import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -65,12 +68,16 @@ fun ExplorerScreen(
     val scope = rememberCoroutineScope()
     val keyboardFocus = remember { FocusRequester() }
 
-    var rootUris by remember {
-        mutableStateOf(
-            prefs.getStringSet("roots", emptySet()).orEmpty()
-                .mapNotNull { runCatching { Uri.parse(it) }.getOrNull() }
-        )
+    val workspaceFile = remember {
+        File(
+            context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS) ?: context.filesDir,
+            "FileDesk"
+        ).apply {
+            mkdirs()
+            listOf("Documentos", "Imagens", "Vídeos", "Downloads", "Projetos").forEach { File(this, it).mkdirs() }
+        }
     }
+    val workspaceRoot = remember { DocumentFile.fromFile(workspaceFile) }
     var nextTabId by remember { mutableIntStateOf(1) }
     var tabs by remember { mutableStateOf<List<ExplorerTab>>(emptyList()) }
     var activeTabId by remember { mutableIntStateOf(0) }
@@ -94,11 +101,6 @@ fun ExplorerScreen(
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
     val currentDir = tabs.firstOrNull { it.id == activeTabId }?.dir
-
-    fun saveRoots(updated: List<Uri>) {
-        rootUris = updated.distinctBy { it.toString() }
-        prefs.edit().putStringSet("roots", rootUris.map { it.toString() }.toSet()).apply()
-    }
 
     fun replaceCurrentDir(dir: DocumentFile) {
         if (tabs.isEmpty()) {
@@ -164,30 +166,27 @@ fun ExplorerScreen(
         }
     }
 
-    val folderPicker = rememberLauncherForActivityResult(OpenDocumentTree()) { uri ->
-        if (uri != null) {
-            runCatching {
-                context.contentResolver.takePersistableUriPermission(
-                    uri,
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                )
-            }
-            val doc = DocumentFile.fromTreeUri(context, uri)
-            if (doc != null) {
-                saveRoots(rootUris + uri)
-                replaceCurrentDir(doc)
-                backHistory = emptyList()
-                forwardHistory = emptyList()
+    val importPicker = rememberLauncherForActivityResult(OpenMultipleDocuments()) { uris ->
+        if (uris.isNotEmpty()) {
+            val destination = currentDir ?: workspaceRoot
+            scope.launch {
+                loading = true
+                val imported = withContext(Dispatchers.IO) {
+                    var ok = true
+                    uris.forEach { uri ->
+                        if (!importUri(context, uri, destination)) ok = false
+                    }
+                    ok
+                }
+                loading = false
+                if (!imported) errorMessage = "Alguns arquivos não puderam ser importados."
                 refreshKey++
             }
         }
     }
 
     LaunchedEffect(Unit) {
-        if (tabs.isEmpty()) {
-            val first = rootUris.firstOrNull()?.let { DocumentFile.fromTreeUri(context, it) }
-            if (first != null) replaceCurrentDir(first)
-        }
+        if (tabs.isEmpty()) replaceCurrentDir(workspaceRoot)
     }
 
     LaunchedEffect(currentDir?.uri, refreshKey) {
@@ -220,8 +219,15 @@ fun ExplorerScreen(
         if (file.isDirectory) {
             navigateTo(file)
         } else {
+            val openUri = if (file.uri.scheme == "file") {
+                FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.fileprovider",
+                    File(file.uri.path ?: return)
+                )
+            } else file.uri
             val intent = Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(file.uri, file.type ?: "*/*")
+                setDataAndType(openUri, file.type ?: "*/*")
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
             runCatching { context.startActivity(intent) }
@@ -230,9 +236,7 @@ fun ExplorerScreen(
     }
 
     fun openNewTab() {
-        val dir = currentDir
-            ?: rootUris.firstOrNull()?.let { DocumentFile.fromTreeUri(context, it) }
-            ?: return
+        val dir = currentDir ?: workspaceRoot
         val id = nextTabId++
         tabs = tabs + ExplorerTab(id, dir)
         activeTabId = id
@@ -297,7 +301,7 @@ fun ExplorerScreen(
         AppHeader(
             darkMode = darkMode,
             onToggleTheme = onToggleTheme,
-            onChooseFolder = { folderPicker.launch(null) }
+            onImport = { importPicker.launch(arrayOf("*/*")) }
         )
 
         if (tabs.isNotEmpty()) {
@@ -340,16 +344,14 @@ fun ExplorerScreen(
         )
 
         if (currentDir == null) {
-            StartScreen(onChooseFolder = { folderPicker.launch(null) })
+            StartScreen(onImport = { importPicker.launch(arrayOf("*/*")) })
         } else {
             Row(modifier = Modifier.weight(1f)) {
                 if (wideScreen) {
                     Sidebar(
-                        context = context,
-                        rootUris = rootUris,
+                        workspaceRoot = workspaceRoot,
                         currentDir = currentDir,
-                        onNavigate = { navigateTo(it) },
-                        onAddLocation = { folderPicker.launch(null) }
+                        onNavigate = { navigateTo(it) }
                     )
                 }
 
@@ -359,6 +361,7 @@ fun ExplorerScreen(
                         singleSelection = selectedUris.size == 1,
                         hasClipboard = clipboard?.items?.isNotEmpty() == true,
                         viewMode = viewMode,
+                        onImport = { importPicker.launch(arrayOf("*/*")) },
                         onCreateFolder = { showCreateFolder = true },
                         onCut = { copySelection(true) },
                         onCopy = { copySelection(false) },
@@ -507,7 +510,7 @@ fun ExplorerScreen(
 private fun AppHeader(
     darkMode: Boolean,
     onToggleTheme: () -> Unit,
-    onChooseFolder: () -> Unit
+    onImport: () -> Unit
 ) {
     Surface(tonalElevation = 2.dp) {
         Row(
@@ -521,10 +524,10 @@ private fun AppHeader(
             IconButton(onClick = onToggleTheme) {
                 Icon(if (darkMode) Icons.Default.LightMode else Icons.Default.DarkMode, "Alternar tema")
             }
-            FilledTonalButton(onClick = onChooseFolder) {
-                Icon(Icons.Default.AddToDrive, null)
+            FilledTonalButton(onClick = onImport) {
+                Icon(Icons.Default.FileDownload, null)
                 Spacer(Modifier.width(6.dp))
-                Text("Adicionar local")
+                Text("Importar arquivos")
             }
         }
     }
@@ -621,64 +624,59 @@ private fun NavigationBar(
 
 @Composable
 private fun Sidebar(
-    context: Context,
-    rootUris: List<Uri>,
+    workspaceRoot: DocumentFile,
     currentDir: DocumentFile,
-    onNavigate: (DocumentFile) -> Unit,
-    onAddLocation: () -> Unit
+    onNavigate: (DocumentFile) -> Unit
 ) {
-    val roots = remember(rootUris) { rootUris.mapNotNull { DocumentFile.fromTreeUri(context, it) } }
-    val firstRoot = roots.firstOrNull()
-    val quick = remember(firstRoot?.uri) {
+    val quick = remember(workspaceRoot.uri) {
         listOf(
-            "Download" to Icons.Default.Download,
-            "Documents" to Icons.Default.Description,
-            "Pictures" to Icons.Default.Image,
-            "Movies" to Icons.Default.Movie,
-            "Music" to Icons.Default.MusicNote
-        ).mapNotNull { (name, icon) -> firstRoot?.findFile(name)?.let { Triple(name, icon, it) } }
+            "Documentos" to Icons.Default.Description,
+            "Imagens" to Icons.Default.Image,
+            "Vídeos" to Icons.Default.Movie,
+            "Downloads" to Icons.Default.Download,
+            "Projetos" to Icons.Default.Work
+        ).mapNotNull { (name, icon) -> workspaceRoot.findFile(name)?.let { Triple(name, icon, it) } }
     }
 
     Surface(modifier = Modifier.width(230.dp).fillMaxHeight(), tonalElevation = 1.dp) {
         LazyColumn(modifier = Modifier.padding(8.dp)) {
             item {
                 NavigationDrawerItem(
-                    label = { Text("Início") },
-                    selected = roots.firstOrNull()?.uri == currentDir.uri,
-                    onClick = { roots.firstOrNull()?.let(onNavigate) },
+                    label = { Text("FileDesk") },
+                    selected = workspaceRoot.uri == currentDir.uri,
+                    onClick = { onNavigate(workspaceRoot) },
                     icon = { Icon(Icons.Default.Home, null) }
                 )
                 Spacer(Modifier.height(8.dp))
-                Text("ACESSO RÁPIDO", style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 12.dp))
+                Text(
+                    "MINHAS PASTAS",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 12.dp)
+                )
             }
             items(quick) { (name, icon, dir) ->
                 NavigationDrawerItem(
-                    label = { Text(quickLabel(name)) },
+                    label = { Text(name) },
                     selected = dir.uri == currentDir.uri,
                     onClick = { onNavigate(dir) },
                     icon = { Icon(icon, null) }
                 )
             }
             item {
-                Spacer(Modifier.height(12.dp))
-                Text("ESTE DISPOSITIVO", style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 12.dp))
-            }
-            items(roots) { root ->
-                NavigationDrawerItem(
-                    label = { Text(root.name ?: "Armazenamento", maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                    selected = root.uri == currentDir.uri,
-                    onClick = { onNavigate(root) },
-                    icon = { Icon(Icons.Default.Storage, null) }
+                Spacer(Modifier.height(14.dp))
+                Text(
+                    "IMPORTAÇÃO",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 12.dp)
                 )
-            }
-            item {
-                TextButton(onClick = onAddLocation, modifier = Modifier.fillMaxWidth()) {
-                    Icon(Icons.Default.Add, null)
-                    Spacer(Modifier.width(6.dp))
-                    Text("Adicionar local")
-                }
+                Text(
+                    "Arquivos externos só entram após você selecioná-los no Android.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(12.dp)
+                )
             }
         }
     }
@@ -690,6 +688,7 @@ private fun CommandBar(
     singleSelection: Boolean,
     hasClipboard: Boolean,
     viewMode: ViewMode,
+    onImport: () -> Unit,
     onCreateFolder: () -> Unit,
     onCut: () -> Unit,
     onCopy: () -> Unit,
@@ -704,6 +703,10 @@ private fun CommandBar(
         modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 10.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        FilledTonalButton(onClick = onImport) {
+            Icon(Icons.Default.FileDownload, null); Spacer(Modifier.width(6.dp)); Text("Importar")
+        }
+        Spacer(Modifier.width(6.dp))
         FilledTonalButton(onClick = onCreateFolder) {
             Icon(Icons.Default.CreateNewFolder, null); Spacer(Modifier.width(6.dp)); Text("Nova pasta")
         }
@@ -888,17 +891,17 @@ private fun StatusBar(
 }
 
 @Composable
-private fun StartScreen(onChooseFolder: () -> Unit) {
+private fun StartScreen(onImport: () -> Unit) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(32.dp)) {
             Icon(Icons.Default.FolderOpen, null, modifier = Modifier.size(72.dp), tint = MaterialTheme.colorScheme.primary)
             Spacer(Modifier.height(16.dp))
             Text("Bem-vindo ao FileDesk", style = MaterialTheme.typography.headlineSmall)
             Spacer(Modifier.height(8.dp))
-            Text("Adicione o armazenamento interno, cartão SD ou unidade USB para começar.")
+            Text("Seu espaço FileDesk está pronto. Importe somente os arquivos externos que desejar.")
             Spacer(Modifier.height(18.dp))
-            Button(onClick = onChooseFolder) {
-                Icon(Icons.Default.AddToDrive, null); Spacer(Modifier.width(7.dp)); Text("Adicionar local")
+            Button(onClick = onImport) {
+                Icon(Icons.Default.FileDownload, null); Spacer(Modifier.width(7.dp)); Text("Importar arquivos")
             }
         }
     }
@@ -953,6 +956,21 @@ private fun PropertyLine(label: String, value: String) {
         Text(label, modifier = Modifier.width(90.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(value)
     }
+}
+
+private fun importUri(context: Context, sourceUri: Uri, destination: DocumentFile): Boolean {
+    return runCatching {
+        val resolver = context.contentResolver
+        val sourceDoc = DocumentFile.fromSingleUri(context, sourceUri)
+        val originalName = sourceDoc?.name ?: "arquivo"
+        val mime = resolver.getType(sourceUri) ?: "application/octet-stream"
+        val name = uniqueName(destination, originalName)
+        val target = destination.createFile(mime, name) ?: return@runCatching false
+        val input = resolver.openInputStream(sourceUri) ?: return@runCatching false
+        val output = resolver.openOutputStream(target.uri) ?: return@runCatching false
+        input.use { i -> output.use { o -> i.copyTo(o) } }
+        true
+    }.getOrDefault(false)
 }
 
 private suspend fun copyDocument(context: Context, source: DocumentFile, destination: DocumentFile): Boolean {
