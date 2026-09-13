@@ -61,7 +61,9 @@ fun ExplorerScreen(
     darkMode: Boolean,
     onToggleTheme: () -> Unit,
     incomingUri: Uri? = null,
-    onIncomingHandled: () -> Unit = {}
+    onIncomingHandled: () -> Unit = {},
+    allFilesAccess: Boolean = false,
+    onRequestAllFilesAccess: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
@@ -80,6 +82,9 @@ fun ExplorerScreen(
         }
     }
     val workspaceRoot = remember { DocumentFile.fromFile(workspaceFile) }
+    val deviceRoot = remember(allFilesAccess) {
+        if (allFilesAccess) DocumentFile.fromFile(Environment.getExternalStorageDirectory()) else workspaceRoot
+    }
     var nextTabId by remember { mutableIntStateOf(1) }
     var tabs by remember { mutableStateOf<List<ExplorerTab>>(emptyList()) }
     var activeTabId by remember { mutableIntStateOf(0) }
@@ -187,13 +192,21 @@ fun ExplorerScreen(
         }
     }
 
-    LaunchedEffect(Unit) {
-        if (tabs.isEmpty()) replaceCurrentDir(workspaceRoot)
+    LaunchedEffect(allFilesAccess) {
+        if (tabs.isEmpty()) {
+            replaceCurrentDir(deviceRoot)
+        } else if (allFilesAccess && currentDir?.uri == workspaceRoot.uri) {
+            replaceCurrentDir(deviceRoot)
+        }
     }
 
-    LaunchedEffect(incomingUri) {
+    LaunchedEffect(incomingUri, allFilesAccess) {
         val uri = incomingUri ?: return@LaunchedEffect
-        val target = workspaceRoot.findFile("Compactados") ?: workspaceRoot
+        val target = if (allFilesAccess) {
+            autoImportDestination(context, uri)
+        } else {
+            workspaceRoot.findFile("Compactados") ?: workspaceRoot
+        }
         loading = true
         val ok = withContext(Dispatchers.IO) { importUri(context, uri, target) }
         loading = false
@@ -201,7 +214,7 @@ fun ExplorerScreen(
             navigateTo(target)
             refreshKey++
         } else {
-            errorMessage = "Não foi possível importar o arquivo ZIP."
+            errorMessage = "Não foi possível importar o arquivo."
         }
         onIncomingHandled()
     }
@@ -352,6 +365,25 @@ fun ExplorerScreen(
             onImport = { importPicker.launch(arrayOf("*/*")) }
         )
 
+        if (!allFilesAccess) {
+            Surface(color = MaterialTheme.colorScheme.secondaryContainer) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.FolderShared, null)
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        "Para usar o FileDesk como explorador principal, permita acesso a todos os arquivos.",
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Button(onClick = onRequestAllFilesAccess) { Text("Permitir acesso") }
+                }
+            }
+        }
+
         if (tabs.isNotEmpty()) {
             TabsBar(
                 tabs = tabs,
@@ -398,6 +430,8 @@ fun ExplorerScreen(
                 if (wideScreen) {
                     Sidebar(
                         workspaceRoot = workspaceRoot,
+                        deviceRoot = deviceRoot,
+                        allFilesAccess = allFilesAccess,
                         currentDir = currentDir,
                         onNavigate = { navigateTo(it) }
                     )
@@ -675,32 +709,57 @@ private fun NavigationBar(
 @Composable
 private fun Sidebar(
     workspaceRoot: DocumentFile,
+    deviceRoot: DocumentFile,
+    allFilesAccess: Boolean,
     currentDir: DocumentFile,
     onNavigate: (DocumentFile) -> Unit
 ) {
-    val quick = remember(workspaceRoot.uri) {
-        listOf(
-            "Documentos" to Icons.Default.Description,
-            "Imagens" to Icons.Default.Image,
-            "Vídeos" to Icons.Default.Movie,
-            "Downloads" to Icons.Default.Download,
-            "Compactados" to Icons.Default.Archive,
-            "Projetos" to Icons.Default.Work
-        ).mapNotNull { (name, icon) -> workspaceRoot.findFile(name)?.let { Triple(name, icon, it) } }
+    val quick = remember(workspaceRoot.uri, deviceRoot.uri, allFilesAccess) {
+        if (allFilesAccess) {
+            listOf(
+                Triple("Downloads", Icons.Default.Download, File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath)),
+                Triple("Documentos", Icons.Default.Description, File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS).absolutePath)),
+                Triple("Imagens", Icons.Default.Image, File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES).absolutePath)),
+                Triple("Vídeos", Icons.Default.Movie, File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES).absolutePath)),
+                Triple("Música", Icons.Default.AudioFile, File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC).absolutePath)),
+                Triple("Compactados", Icons.Default.Archive, File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "FileDesk/Compactados")),
+                Triple("Aplicativos", Icons.Default.Android, File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "FileDesk/Aplicativos"))
+            ).map { (name, icon, file) ->
+                file.mkdirs()
+                Triple(name, icon, DocumentFile.fromFile(file))
+            }
+        } else {
+            listOf(
+                "Documentos" to Icons.Default.Description,
+                "Imagens" to Icons.Default.Image,
+                "Vídeos" to Icons.Default.Movie,
+                "Downloads" to Icons.Default.Download,
+                "Compactados" to Icons.Default.Archive,
+                "Projetos" to Icons.Default.Work
+            ).mapNotNull { (name, icon) -> workspaceRoot.findFile(name)?.let { Triple(name, icon, it) } }
+        }
     }
 
     Surface(modifier = Modifier.width(230.dp).fillMaxHeight(), tonalElevation = 1.dp) {
         LazyColumn(modifier = Modifier.padding(8.dp)) {
             item {
                 NavigationDrawerItem(
-                    label = { Text("FileDesk") },
-                    selected = workspaceRoot.uri == currentDir.uri,
-                    onClick = { onNavigate(workspaceRoot) },
-                    icon = { Icon(Icons.Default.Home, null) }
+                    label = { Text(if (allFilesAccess) "Este dispositivo" else "FileDesk") },
+                    selected = deviceRoot.uri == currentDir.uri,
+                    onClick = { onNavigate(deviceRoot) },
+                    icon = { Icon(Icons.Default.Computer, null) }
                 )
+                if (allFilesAccess) {
+                    NavigationDrawerItem(
+                        label = { Text("Minhas pastas FileDesk") },
+                        selected = workspaceRoot.uri == currentDir.uri,
+                        onClick = { onNavigate(workspaceRoot) },
+                        icon = { Icon(Icons.Default.FolderSpecial, null) }
+                    )
+                }
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "MINHAS PASTAS",
+                    if (allFilesAccess) "ACESSO RÁPIDO" else "MINHAS PASTAS",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 12.dp)
@@ -723,7 +782,10 @@ private fun Sidebar(
                     modifier = Modifier.padding(horizontal = 12.dp)
                 )
                 Text(
-                    "Arquivos externos só entram após você selecioná-los no Android.",
+                    if (allFilesAccess)
+                        "O FileDesk está lendo o armazenamento real do dispositivo. Arquivos abertos ou compartilhados com o app são direcionados automaticamente para a categoria correspondente."
+                    else
+                        "Arquivos externos só entram após você selecioná-los no Android.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(12.dp)
@@ -1096,4 +1158,37 @@ private fun quickLabel(name: String): String = when (name) {
     "Movies" -> "Vídeos"
     "Music" -> "Música"
     else -> name
+}
+
+
+private fun autoImportDestination(context: Context, sourceUri: Uri): DocumentFile {
+    val resolver = context.contentResolver
+    val source = DocumentFile.fromSingleUri(context, sourceUri)
+    val name = source?.name?.lowercase().orEmpty()
+    val mime = resolver.getType(sourceUri).orEmpty()
+
+    val dir = when {
+        name.endsWith(".zip") || mime == "application/zip" || mime == "application/x-zip-compressed" ->
+            File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "FileDesk/Compactados")
+        name.endsWith(".apk") || mime == "application/vnd.android.package-archive" ->
+            File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "FileDesk/Aplicativos")
+        mime.startsWith("image/") ->
+            File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), "FileDesk")
+        mime.startsWith("video/") ->
+            File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES), "FileDesk")
+        mime.startsWith("audio/") ->
+            File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC), "FileDesk")
+        mime.startsWith("text/") ||
+            mime == "application/pdf" ||
+            mime.contains("word") ||
+            mime.contains("excel") ||
+            mime.contains("spreadsheet") ||
+            mime.contains("presentation") ->
+            File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "FileDesk")
+        else ->
+            File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "FileDesk/Outros")
+    }
+
+    dir.mkdirs()
+    return DocumentFile.fromFile(dir)
 }
