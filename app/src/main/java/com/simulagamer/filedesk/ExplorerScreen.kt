@@ -729,13 +729,11 @@ private fun Sidebar(
     val quick = remember(workspaceRoot.uri, deviceRoot.uri, allFilesAccess) {
         if (allFilesAccess) {
             listOf(
-                Triple("Downloads", Icons.Default.Download, File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath)),
                 Triple("Documentos", Icons.Default.Description, File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS).absolutePath)),
+                Triple("Downloads", Icons.Default.Download, File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath)),
                 Triple("Imagens", Icons.Default.Image, File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES).absolutePath)),
-                Triple("Vídeos", Icons.Default.Movie, File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES).absolutePath)),
-                Triple("Música", Icons.Default.AudioFile, File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC).absolutePath)),
-                Triple("Compactados", Icons.Default.Archive, File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "FileDesk/Compactados")),
-                Triple("Aplicativos", Icons.Default.Android, File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "FileDesk/Aplicativos"))
+                Triple("Músicas", Icons.Default.AudioFile, File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC).absolutePath)),
+                Triple("Vídeos", Icons.Default.Movie, File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES).absolutePath))
             ).map { (name, icon, file) ->
                 file.mkdirs()
                 Triple(name, icon, DocumentFile.fromFile(file))
@@ -761,14 +759,6 @@ private fun Sidebar(
                     onClick = { onNavigate(deviceRoot) },
                     icon = { Icon(Icons.Default.Computer, null) }
                 )
-                if (allFilesAccess) {
-                    NavigationDrawerItem(
-                        label = { Text("FileDesk") },
-                        selected = workspaceRoot.uri == currentDir.uri,
-                        onClick = { onNavigate(workspaceRoot) },
-                        icon = { Icon(Icons.Default.FolderSpecial, null) }
-                    )
-                }
                 Spacer(Modifier.height(8.dp))
                 Text(
                     if (allFilesAccess) "PASTAS" else "MINHAS PASTAS",
