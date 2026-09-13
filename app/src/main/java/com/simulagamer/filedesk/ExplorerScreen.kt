@@ -598,17 +598,17 @@ private fun AppHeader(
 ) {
     Surface(tonalElevation = 2.dp) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 5.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(Icons.Default.Folder, null, tint = MaterialTheme.colorScheme.primary)
             Spacer(Modifier.width(8.dp))
-            Text("FileDesk", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+            Text("FileDesk", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.weight(1f))
             IconButton(onClick = onToggleTheme) {
                 Icon(if (darkMode) Icons.Default.LightMode else Icons.Default.DarkMode, "Alternar tema")
             }
-            FilledTonalButton(onClick = onImport) {
+            TextButton(onClick = onImport) {
                 Icon(Icons.Default.FileDownload, null)
                 Spacer(Modifier.width(6.dp))
                 Text("Importar arquivos")
@@ -626,12 +626,12 @@ private fun TabsBar(
     onNewTab: () -> Unit
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp, vertical = 4.dp),
+        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 10.dp, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         tabs.forEach { tab ->
             Surface(
-                shape = RoundedCornerShape(8.dp),
+                shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
                 color = if (tab.id == activeId) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .45f),
                 modifier = Modifier.padding(end = 4.dp)
             ) {
@@ -673,7 +673,7 @@ private fun NavigationBar(
     onRefresh: () -> Unit
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 4.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 3.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         IconButton(onClick = onBack, enabled = canBack) { Icon(Icons.Default.ArrowBack, "Voltar") }
@@ -683,13 +683,13 @@ private fun NavigationBar(
 
         Surface(
             modifier = Modifier.weight(1f).padding(horizontal = 6.dp),
-            shape = RoundedCornerShape(8.dp),
-            tonalElevation = 1.dp
+            shape = RoundedCornerShape(6.dp),
+            tonalElevation = 0.dp
         ) {
-            Row(modifier = Modifier.padding(horizontal = 12.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.FolderOpen, null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
-                Text(currentDir?.name ?: "Este dispositivo", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(explorerPathLabel(currentDir), maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
 
@@ -740,8 +740,8 @@ private fun Sidebar(
         }
     }
 
-    Surface(modifier = Modifier.width(230.dp).fillMaxHeight(), tonalElevation = 1.dp) {
-        LazyColumn(modifier = Modifier.padding(8.dp)) {
+    Surface(modifier = Modifier.width(220.dp).fillMaxHeight(), tonalElevation = 0.dp) {
+        LazyColumn(modifier = Modifier.padding(horizontal = 7.dp, vertical = 6.dp)) {
             item {
                 NavigationDrawerItem(
                     label = { Text(if (allFilesAccess) "Este dispositivo" else "FileDesk") },
@@ -814,14 +814,14 @@ private fun CommandBar(
     onSort: () -> Unit
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 10.dp, vertical = 6.dp),
+        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 10.dp, vertical = 3.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        FilledTonalButton(onClick = onImport) {
+        TextButton(onClick = onImport) {
             Icon(Icons.Default.FileDownload, null); Spacer(Modifier.width(6.dp)); Text("Importar")
         }
         Spacer(Modifier.width(6.dp))
-        FilledTonalButton(onClick = onCreateFolder) {
+        TextButton(onClick = onCreateFolder) {
             Icon(Icons.Default.CreateNewFolder, null); Spacer(Modifier.width(6.dp)); Text("Nova pasta")
         }
         Spacer(Modifier.width(6.dp))
@@ -860,7 +860,7 @@ private fun DetailsView(
     Column {
         Row(
             modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .45f))
-                .padding(horizontal = 8.dp, vertical = 7.dp)
+                .padding(horizontal = 8.dp, vertical = 5.dp)
         ) {
             Spacer(Modifier.width(40.dp))
             Text("Nome", modifier = Modifier.weight(1.6f), fontWeight = FontWeight.SemiBold)
@@ -890,7 +890,7 @@ private fun DetailsView(
                                 onDoubleClick = { onOpen(file) },
                                 onLongClick = { menu = true }
                             )
-                            .padding(horizontal = 8.dp, vertical = 8.dp),
+                            .padding(horizontal = 8.dp, vertical = 5.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Checkbox(
@@ -901,9 +901,9 @@ private fun DetailsView(
                         )
                         Row(modifier = Modifier.weight(1.6f), verticalAlignment = Alignment.CenterVertically) {
                             Icon(
-                                if (file.isDirectory) Icons.Default.Folder else Icons.Default.InsertDriveFile,
+                                fileDisplayIcon(file),
                                 null,
-                                tint = if (file.isDirectory) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                tint = if (file.isDirectory || isZipFile(file)) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Spacer(Modifier.width(9.dp))
                             Text(file.name ?: "Sem nome", maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -975,7 +975,7 @@ private fun GridView(
                     )
                     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.align(Alignment.Center)) {
                         Icon(
-                            if (file.isDirectory) Icons.Default.Folder else Icons.Default.InsertDriveFile,
+                            fileDisplayIcon(file),
                             null,
                             modifier = Modifier.size(44.dp),
                             tint = if (file.isDirectory) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
@@ -1191,4 +1191,25 @@ private fun autoImportDestination(context: Context, sourceUri: Uri): DocumentFil
 
     dir.mkdirs()
     return DocumentFile.fromFile(dir)
+}
+
+
+private fun explorerPathLabel(dir: DocumentFile?): String {
+    if (dir == null) return "Este dispositivo"
+    val raw = dir.uri.path ?: return dir.name ?: "Este dispositivo"
+    val storage = Environment.getExternalStorageDirectory().absolutePath
+    val clean = raw.removePrefix(storage).trim('/')
+    if (clean.isBlank()) return "Este dispositivo"
+    return "Este dispositivo  ›  " + clean.split('/').joinToString("  ›  ") { quickLabel(it) }
+}
+
+private fun fileDisplayIcon(file: DocumentFile) = when {
+    file.isDirectory -> Icons.Default.Folder
+    isZipFile(file) -> Icons.Default.Archive
+    file.type?.startsWith("image/") == true -> Icons.Default.Image
+    file.type?.startsWith("video/") == true -> Icons.Default.Movie
+    file.type?.startsWith("audio/") == true -> Icons.Default.AudioFile
+    file.type == "application/pdf" -> Icons.Default.PictureAsPdf
+    file.name?.endsWith(".apk", ignoreCase = true) == true -> Icons.Default.Android
+    else -> Icons.Default.InsertDriveFile
 }
