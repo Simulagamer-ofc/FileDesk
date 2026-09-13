@@ -596,22 +596,34 @@ private fun AppHeader(
     onToggleTheme: () -> Unit,
     onImport: () -> Unit
 ) {
-    Surface(tonalElevation = 2.dp) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 5.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(Icons.Default.Folder, null, tint = MaterialTheme.colorScheme.primary)
-            Spacer(Modifier.width(8.dp))
-            Text("FileDesk", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.weight(1f))
-            IconButton(onClick = onToggleTheme) {
-                Icon(if (darkMode) Icons.Default.LightMode else Icons.Default.DarkMode, "Alternar tema")
+    Surface(tonalElevation = 1.dp) {
+        Column(Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Default.Folder, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Explorador de Arquivos", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.weight(1f))
+                IconButton(onClick = onToggleTheme, modifier = Modifier.size(36.dp)) {
+                    Icon(if (darkMode) Icons.Default.LightMode else Icons.Default.DarkMode, "Alternar tema", modifier = Modifier.size(18.dp))
+                }
             }
-            TextButton(onClick = onImport) {
-                Icon(Icons.Default.FileDownload, null)
-                Spacer(Modifier.width(6.dp))
-                Text("Importar arquivos")
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                TextButton(onClick = {}) { Text("Arquivo") }
+                TextButton(onClick = {}) { Text("Início") }
+                TextButton(onClick = {}) { Text("Compartilhar") }
+                TextButton(onClick = {}) { Text("Exibir") }
+                Spacer(Modifier.weight(1f))
+                TextButton(onClick = onImport) {
+                    Icon(Icons.Default.FileDownload, null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(5.dp))
+                    Text("Importar")
+                }
             }
         }
     }
@@ -744,14 +756,14 @@ private fun Sidebar(
         LazyColumn(modifier = Modifier.padding(horizontal = 7.dp, vertical = 6.dp)) {
             item {
                 NavigationDrawerItem(
-                    label = { Text(if (allFilesAccess) "Este dispositivo" else "FileDesk") },
+                    label = { Text(if (allFilesAccess) "Este Computador" else "FileDesk") },
                     selected = deviceRoot.uri == currentDir.uri,
                     onClick = { onNavigate(deviceRoot) },
                     icon = { Icon(Icons.Default.Computer, null) }
                 )
                 if (allFilesAccess) {
                     NavigationDrawerItem(
-                        label = { Text("Minhas pastas FileDesk") },
+                        label = { Text("FileDesk") },
                         selected = workspaceRoot.uri == currentDir.uri,
                         onClick = { onNavigate(workspaceRoot) },
                         icon = { Icon(Icons.Default.FolderSpecial, null) }
@@ -759,7 +771,7 @@ private fun Sidebar(
                 }
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    if (allFilesAccess) "ACESSO RÁPIDO" else "MINHAS PASTAS",
+                    if (allFilesAccess) "PASTAS" else "MINHAS PASTAS",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 12.dp)
@@ -771,24 +783,6 @@ private fun Sidebar(
                     selected = dir.uri == currentDir.uri,
                     onClick = { onNavigate(dir) },
                     icon = { Icon(icon, null) }
-                )
-            }
-            item {
-                Spacer(Modifier.height(14.dp))
-                Text(
-                    "IMPORTAÇÃO",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 12.dp)
-                )
-                Text(
-                    if (allFilesAccess)
-                        "O FileDesk está lendo o armazenamento real do dispositivo. Arquivos abertos ou compartilhados com o app são direcionados automaticamente para a categoria correspondente."
-                    else
-                        "Arquivos externos só entram após você selecioná-los no Android.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(12.dp)
                 )
             }
         }
@@ -1199,8 +1193,8 @@ private fun explorerPathLabel(dir: DocumentFile?): String {
     val raw = dir.uri.path ?: return dir.name ?: "Este dispositivo"
     val storage = Environment.getExternalStorageDirectory().absolutePath
     val clean = raw.removePrefix(storage).trim('/')
-    if (clean.isBlank()) return "Este dispositivo"
-    return "Este dispositivo  ›  " + clean.split('/').joinToString("  ›  ") { quickLabel(it) }
+    if (clean.isBlank()) return "Este Computador"
+    return "Este Computador  ›  " + clean.split('/').joinToString("  ›  ") { quickLabel(it) }
 }
 
 private fun fileDisplayIcon(file: DocumentFile) = when {
