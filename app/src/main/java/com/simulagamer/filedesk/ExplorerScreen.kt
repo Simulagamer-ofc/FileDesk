@@ -59,7 +59,9 @@ private data class ClipboardState(val items: List<DocumentFile>, val cut: Boolea
 @Composable
 fun ExplorerScreen(
     darkMode: Boolean,
-    onToggleTheme: () -> Unit
+    onToggleTheme: () -> Unit,
+    incomingUri: Uri? = null,
+    onIncomingHandled: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
@@ -74,7 +76,7 @@ fun ExplorerScreen(
             "FileDesk"
         ).apply {
             mkdirs()
-            listOf("Documentos", "Imagens", "Vídeos", "Downloads", "Projetos").forEach { File(this, it).mkdirs() }
+            listOf("Documentos", "Imagens", "Vídeos", "Downloads", "Compactados", "Projetos").forEach { File(this, it).mkdirs() }
         }
     }
     val workspaceRoot = remember { DocumentFile.fromFile(workspaceFile) }
@@ -189,6 +191,21 @@ fun ExplorerScreen(
         if (tabs.isEmpty()) replaceCurrentDir(workspaceRoot)
     }
 
+    LaunchedEffect(incomingUri) {
+        val uri = incomingUri ?: return@LaunchedEffect
+        val target = workspaceRoot.findFile("Compactados") ?: workspaceRoot
+        loading = true
+        val ok = withContext(Dispatchers.IO) { importUri(context, uri, target) }
+        loading = false
+        if (ok) {
+            navigateTo(target)
+            refreshKey++
+        } else {
+            errorMessage = "Não foi possível importar o arquivo ZIP."
+        }
+        onIncomingHandled()
+    }
+
     LaunchedEffect(currentDir?.uri, refreshKey) {
         val dir = currentDir ?: return@LaunchedEffect
         loading = true
@@ -215,9 +232,40 @@ fun ExplorerScreen(
         )
     }
 
+    fun extractArchive(file: DocumentFile, createFolder: Boolean = true) {
+        val destination = currentDir ?: workspaceRoot
+        scope.launch {
+            loading = true
+            val extracted = withContext(Dispatchers.IO) {
+                extractZip(context, file, destination, createFolder)
+            }
+            loading = false
+            if (extracted == null) errorMessage = "Não foi possível extrair este arquivo ZIP."
+            refreshKey++
+        }
+    }
+
+    fun compressSelection() {
+        val chosen = selectedFiles()
+        val destination = currentDir ?: workspaceRoot
+        if (chosen.isEmpty()) return
+        scope.launch {
+            loading = true
+            val created = withContext(Dispatchers.IO) {
+                createZip(context, chosen, destination)
+            }
+            loading = false
+            if (created == null) errorMessage = "Não foi possível criar o arquivo ZIP."
+            else selectedUris = setOf(created.uri.toString())
+            refreshKey++
+        }
+    }
+
     fun openEntry(file: DocumentFile) {
         if (file.isDirectory) {
             navigateTo(file)
+        } else if (isZipFile(file)) {
+            extractArchive(file, createFolder = true)
         } else {
             val openUri = if (file.uri.scheme == "file") {
                 FileProvider.getUriForFile(
@@ -369,6 +417,7 @@ fun ExplorerScreen(
                         onRename = ::requestRenameSelection,
                         onDelete = ::requestDeleteSelection,
                         onProperties = ::requestProperties,
+                        onCompress = ::compressSelection,
                         onToggleView = {
                             viewMode = if (viewMode == ViewMode.DETAILS) ViewMode.GRID else ViewMode.DETAILS
                         },
@@ -389,7 +438,8 @@ fun ExplorerScreen(
                                 onCopy = { clipboard = ClipboardState(listOf(it), false) },
                                 onRename = { renameTarget = it },
                                 onProperties = { propertiesTarget = it },
-                                onDelete = { deleteTargets = listOf(it) }
+                                onDelete = { deleteTargets = listOf(it) },
+                                onExtractZip = { extractArchive(it, createFolder = true) }
                             )
                         } else {
                             GridView(
@@ -634,6 +684,7 @@ private fun Sidebar(
             "Imagens" to Icons.Default.Image,
             "Vídeos" to Icons.Default.Movie,
             "Downloads" to Icons.Default.Download,
+            "Compactados" to Icons.Default.Archive,
             "Projetos" to Icons.Default.Work
         ).mapNotNull { (name, icon) -> workspaceRoot.findFile(name)?.let { Triple(name, icon, it) } }
     }
@@ -696,6 +747,7 @@ private fun CommandBar(
     onRename: () -> Unit,
     onDelete: () -> Unit,
     onProperties: () -> Unit,
+    onCompress: () -> Unit,
     onToggleView: () -> Unit,
     onSort: () -> Unit
 ) {
@@ -717,6 +769,7 @@ private fun CommandBar(
         TextButton(onClick = onRename, enabled = singleSelection) { Icon(Icons.Default.DriveFileRenameOutline, null); Spacer(Modifier.width(4.dp)); Text("Renomear") }
         TextButton(onClick = onDelete, enabled = hasSelection) { Icon(Icons.Default.DeleteOutline, null); Spacer(Modifier.width(4.dp)); Text("Excluir") }
         TextButton(onClick = onProperties, enabled = singleSelection) { Icon(Icons.Default.Info, null); Spacer(Modifier.width(4.dp)); Text("Propriedades") }
+        TextButton(onClick = onCompress, enabled = hasSelection) { Icon(Icons.Default.Archive, null); Spacer(Modifier.width(4.dp)); Text("Compactar ZIP") }
         Spacer(Modifier.width(8.dp))
         TextButton(onClick = onSort) { Icon(Icons.Default.Sort, null); Spacer(Modifier.width(4.dp)); Text("Classificar") }
         TextButton(onClick = onToggleView) {
@@ -739,7 +792,8 @@ private fun DetailsView(
     onCopy: (DocumentFile) -> Unit,
     onRename: (DocumentFile) -> Unit,
     onProperties: (DocumentFile) -> Unit,
-    onDelete: (DocumentFile) -> Unit
+    onDelete: (DocumentFile) -> Unit,
+    onExtractZip: (DocumentFile) -> Unit
 ) {
     Column {
         Row(
@@ -801,6 +855,13 @@ private fun DetailsView(
 
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                         DropdownMenuItem(text = { Text("Abrir") }, onClick = { menu = false; onOpen(file) }, leadingIcon = { Icon(Icons.Default.OpenInNew, null) })
+                        if (isZipFile(file)) {
+                            DropdownMenuItem(
+                                text = { Text("Extrair tudo") },
+                                onClick = { menu = false; onExtractZip(file) },
+                                leadingIcon = { Icon(Icons.Default.Unarchive, null) }
+                            )
+                        }
                         DropdownMenuItem(text = { Text("Recortar") }, onClick = { menu = false; onCut(file) }, leadingIcon = { Icon(Icons.Default.ContentCut, null) })
                         DropdownMenuItem(text = { Text("Copiar") }, onClick = { menu = false; onCopy(file) }, leadingIcon = { Icon(Icons.Default.ContentCopy, null) })
                         DropdownMenuItem(text = { Text("Renomear") }, onClick = { menu = false; onRename(file) }, leadingIcon = { Icon(Icons.Default.DriveFileRenameOutline, null) })
@@ -967,7 +1028,9 @@ private fun importUri(context: Context, sourceUri: Uri, destination: DocumentFil
         val name = uniqueName(destination, originalName)
         val target = destination.createFile(mime, name) ?: return@runCatching false
         val input = resolver.openInputStream(sourceUri) ?: return@runCatching false
-        val output = resolver.openOutputStream(target.uri) ?: return@runCatching false
+        val output = if (target.uri.scheme == "file") {
+            java.io.FileOutputStream(File(target.uri.path ?: return@runCatching false))
+        } else resolver.openOutputStream(target.uri) ?: return@runCatching false
         input.use { i -> output.use { o -> i.copyTo(o) } }
         true
     }.getOrDefault(false)
@@ -987,8 +1050,12 @@ private suspend fun copyDocument(context: Context, source: DocumentFile, destina
             val originalName = source.name ?: "arquivo"
             val name = uniqueName(destination, originalName)
             val target = destination.createFile(source.type ?: "application/octet-stream", name) ?: return@runCatching false
-            val input = context.contentResolver.openInputStream(source.uri) ?: return@runCatching false
-            val output = context.contentResolver.openOutputStream(target.uri) ?: return@runCatching false
+            val input = if (source.uri.scheme == "file") {
+                java.io.FileInputStream(File(source.uri.path ?: return@runCatching false))
+            } else context.contentResolver.openInputStream(source.uri) ?: return@runCatching false
+            val output = if (target.uri.scheme == "file") {
+                java.io.FileOutputStream(File(target.uri.path ?: return@runCatching false))
+            } else context.contentResolver.openOutputStream(target.uri) ?: return@runCatching false
             input.use { i -> output.use { o -> i.copyTo(o) } }
             true
         }
