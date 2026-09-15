@@ -597,33 +597,21 @@ private fun AppHeader(
     onImport: () -> Unit
 ) {
     Surface(tonalElevation = 1.dp) {
-        Column(Modifier.fillMaxWidth()) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(Icons.Default.Folder, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("Explorador de Arquivos", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.weight(1f))
-                IconButton(onClick = onToggleTheme, modifier = Modifier.size(36.dp)) {
-                    Icon(if (darkMode) Icons.Default.LightMode else Icons.Default.DarkMode, "Alternar tema", modifier = Modifier.size(18.dp))
-                }
+        Row(
+            modifier = Modifier.fillMaxWidth().height(40.dp).padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(Icons.Default.Folder, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(19.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("FileDesk", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.width(8.dp))
+            Text("• Explorador de Arquivos", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.weight(1f))
+            IconButton(onClick = onImport, modifier = Modifier.size(34.dp)) {
+                Icon(Icons.Default.FileDownload, "Importar", modifier = Modifier.size(18.dp))
             }
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                TextButton(onClick = {}) { Text("Arquivo") }
-                TextButton(onClick = {}) { Text("Início") }
-                TextButton(onClick = {}) { Text("Compartilhar") }
-                TextButton(onClick = {}) { Text("Exibir") }
-                Spacer(Modifier.weight(1f))
-                TextButton(onClick = onImport) {
-                    Icon(Icons.Default.FileDownload, null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(5.dp))
-                    Text("Importar")
-                }
+            IconButton(onClick = onToggleTheme, modifier = Modifier.size(34.dp)) {
+                Icon(if (darkMode) Icons.Default.LightMode else Icons.Default.DarkMode, "Alternar tema", modifier = Modifier.size(18.dp))
             }
         }
     }
@@ -750,18 +738,18 @@ private fun Sidebar(
         }
     }
 
-    Surface(modifier = Modifier.width(220.dp).fillMaxHeight(), tonalElevation = 0.dp) {
+    Surface(modifier = Modifier.width(236.dp).fillMaxHeight(), tonalElevation = 0.dp) {
         LazyColumn(modifier = Modifier.padding(horizontal = 7.dp, vertical = 6.dp)) {
             item {
                 NavigationDrawerItem(
-                    label = { Text(if (allFilesAccess) "Este Computador" else "FileDesk") },
+                    label = { Text(if (allFilesAccess) "Este Computador" else "Início") },
                     selected = deviceRoot.uri == currentDir.uri,
                     onClick = { onNavigate(deviceRoot) },
                     icon = { Icon(Icons.Default.Computer, null) }
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    if (allFilesAccess) "PASTAS" else "MINHAS PASTAS",
+                    if (allFilesAccess) "ACESSO RÁPIDO" else "PASTAS",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 12.dp)
@@ -848,7 +836,7 @@ private fun DetailsView(
         ) {
             Spacer(Modifier.width(40.dp))
             Text("Nome", modifier = Modifier.weight(1.6f), fontWeight = FontWeight.SemiBold)
-            Text("Data", modifier = Modifier.weight(.8f), fontWeight = FontWeight.SemiBold)
+            Text("Data de modificação", modifier = Modifier.weight(.8f), fontWeight = FontWeight.SemiBold)
             Text("Tipo", modifier = Modifier.weight(.7f), fontWeight = FontWeight.SemiBold)
             Text("Tamanho", modifier = Modifier.weight(.55f), fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.width(42.dp))
