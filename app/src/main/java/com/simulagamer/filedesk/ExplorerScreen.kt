@@ -626,12 +626,12 @@ private fun TabsBar(
     onNewTab: () -> Unit
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 10.dp, vertical = 2.dp),
+        modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .25f)).horizontalScroll(rememberScrollState()).padding(start = 8.dp, top = 5.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         tabs.forEach { tab ->
             Surface(
-                shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
+                shape = RoundedCornerShape(topStart = 9.dp, topEnd = 9.dp),
                 color = if (tab.id == activeId) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .45f),
                 modifier = Modifier.padding(end = 4.dp)
             ) {
@@ -673,7 +673,7 @@ private fun NavigationBar(
     onRefresh: () -> Unit
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 3.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         IconButton(onClick = onBack, enabled = canBack) { Icon(Icons.Default.ArrowBack, "Voltar") }
@@ -699,7 +699,7 @@ private fun NavigationBar(
                 onValueChange = onSearchChange,
                 modifier = Modifier.widthIn(min = 170.dp, max = 320.dp),
                 singleLine = true,
-                placeholder = { Text("Pesquisar") },
+                placeholder = { Text("Pesquisar em " + (currentDir?.name ?: "Este Computador")) },
                 leadingIcon = { Icon(Icons.Default.Search, null) }
             )
         }
@@ -793,8 +793,8 @@ private fun CommandBar(
             Icon(Icons.Default.FileDownload, null); Spacer(Modifier.width(6.dp)); Text("Importar")
         }
         Spacer(Modifier.width(6.dp))
-        TextButton(onClick = onCreateFolder) {
-            Icon(Icons.Default.CreateNewFolder, null); Spacer(Modifier.width(6.dp)); Text("Nova pasta")
+        FilledTonalButton(onClick = onCreateFolder, shape = RoundedCornerShape(5.dp)) {
+            Icon(Icons.Default.Add, null); Spacer(Modifier.width(6.dp)); Text("Novo")
         }
         Spacer(Modifier.width(6.dp))
         TextButton(onClick = onCut, enabled = hasSelection) { Icon(Icons.Default.ContentCut, null); Spacer(Modifier.width(4.dp)); Text("Recortar") }
@@ -862,7 +862,7 @@ private fun DetailsView(
                                 onDoubleClick = { onOpen(file) },
                                 onLongClick = { menu = true }
                             )
-                            .padding(horizontal = 8.dp, vertical = 5.dp),
+                            .padding(horizontal = 8.dp, vertical = 7.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Checkbox(
