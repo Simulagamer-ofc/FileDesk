@@ -16,8 +16,8 @@ Este arquivo serve como fonte de verdade para qualquer IA ou desenvolvedor que t
 - Java: 17
 - Min SDK: 26
 - Target SDK: 35
-- Versão configurada atualmente: 1.4.0
-- Version code: 14
+- Versão configurada atualmente: 1.6.0 Beta 1
+- Version code: 16
 - Repositório principal: `Simulagamer-ofc/FileDesk`
 - Branch principal: `main`
 

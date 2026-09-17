@@ -99,6 +99,9 @@ fun ExplorerScreen(
     var clipboard by remember { mutableStateOf<ClipboardState?>(null) }
     var viewMode by remember { mutableStateOf(ViewMode.DETAILS) }
     var sortMode by remember { mutableStateOf(SortMode.NAME) }
+    var showTechnicalFolders by remember {
+        mutableStateOf(prefs.getBoolean("show_technical_folders", false))
+    }
 
     var showCreateFolder by remember { mutableStateOf(false) }
     var renameTarget by remember { mutableStateOf<DocumentFile?>(null) }
@@ -229,8 +232,13 @@ fun ExplorerScreen(
         selectedUris = selectedUris.intersect(files.map { it.uri.toString() }.toSet())
     }
 
-    val visibleFiles = remember(files, search, sortMode) {
-        val filtered = if (search.isBlank()) files else files.filter {
+    val visibleFiles = remember(files, search, sortMode, showTechnicalFolders) {
+        val cleanFiles = if (!showTechnicalFolders) {
+            files.filterNot(::isTechnicalFolder)
+        } else {
+            files
+        }
+        val filtered = if (search.isBlank()) cleanFiles else cleanFiles.filter {
             (it.name ?: "").contains(search, ignoreCase = true)
         }
         val itemComparator = when (sortMode) {
@@ -455,7 +463,13 @@ fun ExplorerScreen(
                         onToggleView = {
                             viewMode = if (viewMode == ViewMode.DETAILS) ViewMode.GRID else ViewMode.DETAILS
                         },
-                        onSort = { showSortMenu = true }
+                        onSort = { showSortMenu = true },
+                        showTechnicalFolders = showTechnicalFolders,
+                        onToggleTechnicalFolders = {
+                            showTechnicalFolders = !showTechnicalFolders
+                            prefs.edit().putBoolean("show_technical_folders", showTechnicalFolders).apply()
+                            selectedUris = emptySet()
+                        }
                     )
 
                     if (loading) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
@@ -597,33 +611,21 @@ private fun AppHeader(
     onImport: () -> Unit
 ) {
     Surface(tonalElevation = 1.dp) {
-        Column(Modifier.fillMaxWidth()) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(Icons.Default.Folder, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("Explorador de Arquivos", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.weight(1f))
-                IconButton(onClick = onToggleTheme, modifier = Modifier.size(36.dp)) {
-                    Icon(if (darkMode) Icons.Default.LightMode else Icons.Default.DarkMode, "Alternar tema", modifier = Modifier.size(18.dp))
-                }
+        Row(
+            modifier = Modifier.fillMaxWidth().height(40.dp).padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(Icons.Default.Folder, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(19.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("FileDesk", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.width(8.dp))
+            Text("• Explorador de Arquivos", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.weight(1f))
+            IconButton(onClick = onImport, modifier = Modifier.size(34.dp)) {
+                Icon(Icons.Default.FileDownload, "Importar", modifier = Modifier.size(18.dp))
             }
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                TextButton(onClick = {}) { Text("Arquivo") }
-                TextButton(onClick = {}) { Text("Início") }
-                TextButton(onClick = {}) { Text("Compartilhar") }
-                TextButton(onClick = {}) { Text("Exibir") }
-                Spacer(Modifier.weight(1f))
-                TextButton(onClick = onImport) {
-                    Icon(Icons.Default.FileDownload, null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(5.dp))
-                    Text("Importar")
-                }
+            IconButton(onClick = onToggleTheme, modifier = Modifier.size(34.dp)) {
+                Icon(if (darkMode) Icons.Default.LightMode else Icons.Default.DarkMode, "Alternar tema", modifier = Modifier.size(18.dp))
             }
         }
     }
@@ -638,12 +640,12 @@ private fun TabsBar(
     onNewTab: () -> Unit
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 10.dp, vertical = 2.dp),
+        modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .25f)).horizontalScroll(rememberScrollState()).padding(start = 8.dp, top = 5.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         tabs.forEach { tab ->
             Surface(
-                shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
+                shape = RoundedCornerShape(topStart = 9.dp, topEnd = 9.dp),
                 color = if (tab.id == activeId) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .45f),
                 modifier = Modifier.padding(end = 4.dp)
             ) {
@@ -685,7 +687,7 @@ private fun NavigationBar(
     onRefresh: () -> Unit
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 3.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         IconButton(onClick = onBack, enabled = canBack) { Icon(Icons.Default.ArrowBack, "Voltar") }
@@ -711,7 +713,7 @@ private fun NavigationBar(
                 onValueChange = onSearchChange,
                 modifier = Modifier.widthIn(min = 170.dp, max = 320.dp),
                 singleLine = true,
-                placeholder = { Text("Pesquisar") },
+                placeholder = { Text("Pesquisar em " + (currentDir?.name ?: "Este Computador")) },
                 leadingIcon = { Icon(Icons.Default.Search, null) }
             )
         }
@@ -750,18 +752,18 @@ private fun Sidebar(
         }
     }
 
-    Surface(modifier = Modifier.width(220.dp).fillMaxHeight(), tonalElevation = 0.dp) {
+    Surface(modifier = Modifier.width(236.dp).fillMaxHeight(), tonalElevation = 0.dp) {
         LazyColumn(modifier = Modifier.padding(horizontal = 7.dp, vertical = 6.dp)) {
             item {
                 NavigationDrawerItem(
-                    label = { Text(if (allFilesAccess) "Este Computador" else "FileDesk") },
+                    label = { Text(if (allFilesAccess) "Este Computador" else "Início") },
                     selected = deviceRoot.uri == currentDir.uri,
                     onClick = { onNavigate(deviceRoot) },
                     icon = { Icon(Icons.Default.Computer, null) }
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    if (allFilesAccess) "PASTAS" else "MINHAS PASTAS",
+                    if (allFilesAccess) "ACESSO RÁPIDO" else "PASTAS",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 12.dp)
@@ -795,7 +797,9 @@ private fun CommandBar(
     onProperties: () -> Unit,
     onCompress: () -> Unit,
     onToggleView: () -> Unit,
-    onSort: () -> Unit
+    onSort: () -> Unit,
+    showTechnicalFolders: Boolean,
+    onToggleTechnicalFolders: () -> Unit
 ) {
     Row(
         modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 10.dp, vertical = 3.dp),
@@ -805,8 +809,8 @@ private fun CommandBar(
             Icon(Icons.Default.FileDownload, null); Spacer(Modifier.width(6.dp)); Text("Importar")
         }
         Spacer(Modifier.width(6.dp))
-        TextButton(onClick = onCreateFolder) {
-            Icon(Icons.Default.CreateNewFolder, null); Spacer(Modifier.width(6.dp)); Text("Nova pasta")
+        FilledTonalButton(onClick = onCreateFolder, shape = RoundedCornerShape(5.dp)) {
+            Icon(Icons.Default.Add, null); Spacer(Modifier.width(6.dp)); Text("Novo")
         }
         Spacer(Modifier.width(6.dp))
         TextButton(onClick = onCut, enabled = hasSelection) { Icon(Icons.Default.ContentCut, null); Spacer(Modifier.width(4.dp)); Text("Recortar") }
@@ -822,6 +826,11 @@ private fun CommandBar(
             Icon(if (viewMode == ViewMode.DETAILS) Icons.Default.GridView else Icons.Default.ViewList, null)
             Spacer(Modifier.width(4.dp))
             Text(if (viewMode == ViewMode.DETAILS) "Grade" else "Detalhes")
+        }
+        TextButton(onClick = onToggleTechnicalFolders) {
+            Icon(if (showTechnicalFolders) Icons.Default.VisibilityOff else Icons.Default.Visibility, null)
+            Spacer(Modifier.width(4.dp))
+            Text(if (showTechnicalFolders) "Ocultar pastas do sistema" else "Mostrar pastas do sistema")
         }
     }
 }
@@ -848,7 +857,7 @@ private fun DetailsView(
         ) {
             Spacer(Modifier.width(40.dp))
             Text("Nome", modifier = Modifier.weight(1.6f), fontWeight = FontWeight.SemiBold)
-            Text("Data", modifier = Modifier.weight(.8f), fontWeight = FontWeight.SemiBold)
+            Text("Data de modificação", modifier = Modifier.weight(.8f), fontWeight = FontWeight.SemiBold)
             Text("Tipo", modifier = Modifier.weight(.7f), fontWeight = FontWeight.SemiBold)
             Text("Tamanho", modifier = Modifier.weight(.55f), fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.width(42.dp))
@@ -865,16 +874,20 @@ private fun DetailsView(
                             .background(if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = .55f) else MaterialTheme.colorScheme.surface)
                             .combinedClickable(
                                 onClick = {
-                                    onSelectionChange(
-                                        if (selected) selectedUris - id
-                                        else if (selectedUris.isEmpty()) setOf(id)
-                                        else selectedUris + id
-                                    )
+                                    if (file.isDirectory) {
+                                        onOpen(file)
+                                    } else {
+                                        onSelectionChange(
+                                            if (selected) selectedUris - id
+                                            else if (selectedUris.isEmpty()) setOf(id)
+                                            else selectedUris + id
+                                        )
+                                    }
                                 },
                                 onDoubleClick = { onOpen(file) },
                                 onLongClick = { menu = true }
                             )
-                            .padding(horizontal = 8.dp, vertical = 5.dp),
+                            .padding(horizontal = 8.dp, vertical = 7.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Checkbox(
@@ -941,7 +954,13 @@ private fun GridView(
             val selected = id in selectedUris
             Card(
                 modifier = Modifier.height(128.dp).combinedClickable(
-                    onClick = { onSelectionChange(if (selected) selectedUris - id else selectedUris + id) },
+                    onClick = {
+                        if (file.isDirectory) {
+                            onOpen(file)
+                        } else {
+                            onSelectionChange(if (selected) selectedUris - id else selectedUris + id)
+                        }
+                    },
                     onDoubleClick = { onOpen(file) },
                     onLongClick = { onProperties(file) }
                 ),
@@ -1142,6 +1161,25 @@ private fun quickLabel(name: String): String = when (name) {
     "Movies" -> "Vídeos"
     "Music" -> "Música"
     else -> name
+}
+
+private val technicalFolderNames = setOf(
+    "android",
+    "adobe",
+    "filedesk",
+    ".android_secure",
+    ".cache",
+    ".config",
+    ".keyguard",
+    ".thumbnails",
+    ".\$trash\$",
+    "lost.dir"
+)
+
+private fun isTechnicalFolder(file: DocumentFile): Boolean {
+    if (!file.isDirectory) return false
+    val name = file.name?.trim()?.lowercase(Locale.ROOT).orEmpty()
+    return name.startsWith(".") || name in technicalFolderNames
 }
 
 

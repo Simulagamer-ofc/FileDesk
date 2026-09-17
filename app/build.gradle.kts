@@ -1,7 +1,7 @@
 plugins { id("com.android.application"); id("org.jetbrains.kotlin.android"); id("org.jetbrains.kotlin.plugin.compose") }
 android {
  namespace="com.simulagamer.filedesk"; compileSdk=35
- defaultConfig { applicationId="com.simulagamer.filedesk"; minSdk=26; targetSdk=35; versionCode=14; versionName="1.4.0" }
+ defaultConfig { applicationId="com.simulagamer.filedesk"; minSdk=26; targetSdk=35; versionCode=17; versionName="1.6.1-beta2" }
  compileOptions { sourceCompatibility=JavaVersion.VERSION_17; targetCompatibility=JavaVersion.VERSION_17 }
  kotlinOptions { jvmTarget="17" }
  buildFeatures { compose=true }
