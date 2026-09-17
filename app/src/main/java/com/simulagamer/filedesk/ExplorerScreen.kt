@@ -99,6 +99,9 @@ fun ExplorerScreen(
     var clipboard by remember { mutableStateOf<ClipboardState?>(null) }
     var viewMode by remember { mutableStateOf(ViewMode.DETAILS) }
     var sortMode by remember { mutableStateOf(SortMode.NAME) }
+    var showTechnicalFolders by remember {
+        mutableStateOf(prefs.getBoolean("show_technical_folders", false))
+    }
 
     var showCreateFolder by remember { mutableStateOf(false) }
     var renameTarget by remember { mutableStateOf<DocumentFile?>(null) }
@@ -229,8 +232,13 @@ fun ExplorerScreen(
         selectedUris = selectedUris.intersect(files.map { it.uri.toString() }.toSet())
     }
 
-    val visibleFiles = remember(files, search, sortMode) {
-        val filtered = if (search.isBlank()) files else files.filter {
+    val visibleFiles = remember(files, search, sortMode, showTechnicalFolders) {
+        val cleanFiles = if (!showTechnicalFolders) {
+            files.filterNot(::isTechnicalFolder)
+        } else {
+            files
+        }
+        val filtered = if (search.isBlank()) cleanFiles else cleanFiles.filter {
             (it.name ?: "").contains(search, ignoreCase = true)
         }
         val itemComparator = when (sortMode) {
@@ -455,7 +463,13 @@ fun ExplorerScreen(
                         onToggleView = {
                             viewMode = if (viewMode == ViewMode.DETAILS) ViewMode.GRID else ViewMode.DETAILS
                         },
-                        onSort = { showSortMenu = true }
+                        onSort = { showSortMenu = true },
+                        showTechnicalFolders = showTechnicalFolders,
+                        onToggleTechnicalFolders = {
+                            showTechnicalFolders = !showTechnicalFolders
+                            prefs.edit().putBoolean("show_technical_folders", showTechnicalFolders).apply()
+                            selectedUris = emptySet()
+                        }
                     )
 
                     if (loading) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
@@ -783,7 +797,9 @@ private fun CommandBar(
     onProperties: () -> Unit,
     onCompress: () -> Unit,
     onToggleView: () -> Unit,
-    onSort: () -> Unit
+    onSort: () -> Unit,
+    showTechnicalFolders: Boolean,
+    onToggleTechnicalFolders: () -> Unit
 ) {
     Row(
         modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 10.dp, vertical = 3.dp),
@@ -810,6 +826,11 @@ private fun CommandBar(
             Icon(if (viewMode == ViewMode.DETAILS) Icons.Default.GridView else Icons.Default.ViewList, null)
             Spacer(Modifier.width(4.dp))
             Text(if (viewMode == ViewMode.DETAILS) "Grade" else "Detalhes")
+        }
+        TextButton(onClick = onToggleTechnicalFolders) {
+            Icon(if (showTechnicalFolders) Icons.Default.VisibilityOff else Icons.Default.Visibility, null)
+            Spacer(Modifier.width(4.dp))
+            Text(if (showTechnicalFolders) "Ocultar pastas do sistema" else "Mostrar pastas do sistema")
         }
     }
 }
@@ -1130,6 +1151,25 @@ private fun quickLabel(name: String): String = when (name) {
     "Movies" -> "Vídeos"
     "Music" -> "Música"
     else -> name
+}
+
+private val technicalFolderNames = setOf(
+    "android",
+    "adobe",
+    "filedesk",
+    ".android_secure",
+    ".cache",
+    ".config",
+    ".keyguard",
+    ".thumbnails",
+    ".\$trash\$",
+    "lost.dir"
+)
+
+private fun isTechnicalFolder(file: DocumentFile): Boolean {
+    if (!file.isDirectory) return false
+    val name = file.name?.trim()?.lowercase(Locale.ROOT).orEmpty()
+    return name.startsWith(".") || name in technicalFolderNames
 }
 
 
