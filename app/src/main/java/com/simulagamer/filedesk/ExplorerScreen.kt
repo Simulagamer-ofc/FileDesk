@@ -874,11 +874,15 @@ private fun DetailsView(
                             .background(if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = .55f) else MaterialTheme.colorScheme.surface)
                             .combinedClickable(
                                 onClick = {
-                                    onSelectionChange(
-                                        if (selected) selectedUris - id
-                                        else if (selectedUris.isEmpty()) setOf(id)
-                                        else selectedUris + id
-                                    )
+                                    if (file.isDirectory) {
+                                        onOpen(file)
+                                    } else {
+                                        onSelectionChange(
+                                            if (selected) selectedUris - id
+                                            else if (selectedUris.isEmpty()) setOf(id)
+                                            else selectedUris + id
+                                        )
+                                    }
                                 },
                                 onDoubleClick = { onOpen(file) },
                                 onLongClick = { menu = true }
@@ -950,7 +954,13 @@ private fun GridView(
             val selected = id in selectedUris
             Card(
                 modifier = Modifier.height(128.dp).combinedClickable(
-                    onClick = { onSelectionChange(if (selected) selectedUris - id else selectedUris + id) },
+                    onClick = {
+                        if (file.isDirectory) {
+                            onOpen(file)
+                        } else {
+                            onSelectionChange(if (selected) selectedUris - id else selectedUris + id)
+                        }
+                    },
                     onDoubleClick = { onOpen(file) },
                     onLongClick = { onProperties(file) }
                 ),
